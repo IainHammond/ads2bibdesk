@@ -24,6 +24,26 @@ from .prefs import Preferences
 
 logger = logging.getLogger(__name__)
 
+# Reusable session for connection pooling, cookie persistence, and consistent headers
+_session = requests.Session()
+_session.headers.update({
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) Gecko/20100101 Firefox/149.0',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1',
+    'Sec-Fetch-Dest': 'document',
+    'Sec-Fetch-Mode': 'navigate',
+    'Sec-Fetch-Site': 'cross-site',
+    'Sec-Fetch-User': '?1',
+    'DNT': '1',
+    'Referer': 'https://ui.adsabs.harvard.edu/',
+})
+
+# Timeout in seconds for all HTTP requests
+_REQUEST_TIMEOUT = 30
+
 
 def main():
     """Parse options and launch main loop."""
@@ -72,7 +92,7 @@ def main():
         If no value is specified, all arXiv entries will be examined.
         """
     parser.add_argument(
-        '-u', '--update-arxiv', type=str, nargs='?', metavar='mm/yy-mm/yy', 
+        '-u', '--update-arxiv', type=str, nargs='?', metavar='mm/yy-mm/yy',
         dest='update_arxiv', default=None, const='-',
         help=textwrap.dedent(help_text))
 
@@ -479,7 +499,7 @@ def process_token(article_identifier, prefs, bibdesk, skip_bibcode=False):
     return True
 
 
-def process_pdf(article_bibcode, article_esources, prefs=None, 
+def process_pdf(article_bibcode, article_esources, prefs=None,
                 esource_types=['pub_pdf', 'pub_html', 'eprint_pdf', 'ads_pdf', 'author_pdf']):
     """Process PDF file related operations.
 
@@ -505,20 +525,31 @@ def process_pdf(article_bibcode, article_esources, prefs=None,
         # Determine the PDF URL based on esource type
         if esource_type == 'pub_html':
             logger.debug("Try: {}".format(esource_url))
-            response = requests.get(esource_url, allow_redirects=True, headers={
-                                    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'})
+            try:
+                response = _session.get(esource_url, allow_redirects=True, timeout=_REQUEST_TIMEOUT)
+            except (requests.ConnectionError, requests.Timeout) as e:
+                logger.debug("Connection failed for {}: {}".format(esource_url, e))
+                continue
+            if not response.ok:
+                logger.debug("HTTP {} for {}".format(response.status_code, esource_url))
+                continue
             logger.debug("    >>> {}".format(response.url))
             pdf_url = get_pdf_fromhtml(response)
         else:
             pdf_url = esource_url
 
         logger.debug("Try: {}".format(pdf_url))
-        response = requests.get(pdf_url, allow_redirects=True, headers={
-                                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36'})
+        try:
+            response = _session.get(pdf_url, allow_redirects=True, timeout=_REQUEST_TIMEOUT)
+        except (requests.ConnectionError, requests.Timeout) as e:
+            logger.debug("Connection failed for {}: {}".format(pdf_url, e))
+            continue
+        if not response.ok:
+            logger.debug("HTTP {} for {}".format(response.status_code, pdf_url))
+            continue
 
         fd, pdf_filename = tempfile.mkstemp(suffix='.pdf')
-        if response.status_code not in [404, 403]:
-            os.fdopen(fd, 'wb').write(response.content)
+        os.fdopen(fd, 'wb').write(response.content)
 
         # Check if downloaded file is a PDF
         if 'PDF document' in get_filetype(pdf_filename):
@@ -597,8 +628,8 @@ def process_pdf_proxy(pdf_url, pdf_filename, user, server, port=22):
     ssh_command = (
         f'ssh -p {port} {user}@{server} "touch {tmpfile}; '
         f'curl --output {tmpfile} -J -L --referer \\";auto\\" '
-        f'--user-agent \\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_9_5) AppleWebKit/537.36 '
-        f'(KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36\\" \\"{pdf_url}\\""'
+        f'--user-agent \\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) '
+        f'Gecko/20100101 Firefox/149.0\\" \\"{pdf_url}\\""'
     )
 
     # Constructing the SCP command to copy the downloaded PDF to local filesystem
