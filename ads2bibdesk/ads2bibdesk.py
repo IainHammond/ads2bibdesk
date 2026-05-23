@@ -27,9 +27,9 @@ logger = logging.getLogger(__name__)
 # Reusable session for connection pooling, cookie persistence, and consistent headers
 _session = requests.Session()
 _session.headers.update({
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0',
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:151.0) Gecko/20100101 Firefox/151.0',
     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
+    'Accept-Language': 'en-GB, en-US, en;q=0.5',
     'Accept-Encoding': 'gzip, deflate, br',
     'Connection': 'keep-alive',
     'Upgrade-Insecure-Requests': '1',
@@ -628,8 +628,8 @@ def process_pdf_proxy(pdf_url, pdf_filename, user, server, port=22):
     ssh_command = (
         f'ssh -p {port} {user}@{server} "touch {tmpfile}; '
         f'curl --output {tmpfile} -J -L --referer \\";auto\\" '
-        f'--user-agent \\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:149.0) '
-        f'Gecko/20100101 Firefox/149.0\\" \\"{pdf_url}\\""'
+        f'--user-agent \\"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:151.0) '
+        f'Gecko/20100101 Firefox/151.0\\" \\"{pdf_url}\\""'
     )
 
     # Constructing the SCP command to copy the downloaded PDF to local filesystem
